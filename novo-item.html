@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cadastrar Item — Reuso</title>
+  <meta name="description" content="Cadastre um item que você não usa mais e encontre quem precisa dele.">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="css/style.css" rel="stylesheet">
+</head>
+<body>
+  <div id="navbar-container"></div>
+
+  <main>
+    <div class="container section-padding" style="max-width: 720px;">
+      <h2 class="mb-1"><i class="bi bi-plus-circle text-reuso-primary me-2"></i>Cadastrar Novo Item</h2>
+      <p class="text-muted mb-4">Preencha os dados do item que deseja disponibilizar</p>
+
+      <div id="alert-area"></div>
+
+      <div class="card shadow-sm">
+        <div class="card-body p-4">
+          <form id="new-item-form" novalidate>
+            <!-- Title -->
+            <div class="mb-3">
+              <label for="item-title" class="form-label">Título *</label>
+              <input type="text" class="form-control" id="item-title" placeholder="Ex: 100m² de Telha Romana" maxlength="100" required>
+              <div class="form-text">Máximo 100 caracteres</div>
+            </div>
+
+            <!-- Category -->
+            <div class="mb-3">
+              <label for="item-category" class="form-label">Categoria *</label>
+              <select class="form-select" id="item-category" required>
+                <option value="">Selecione uma categoria...</option>
+              </select>
+            </div>
+
+            <!-- Description -->
+            <div class="mb-3">
+              <label for="item-description" class="form-label">Descrição *</label>
+              <textarea class="form-control" id="item-description" rows="4" maxlength="500" placeholder="Descreva o estado do item, detalhes relevantes, condições..." required></textarea>
+              <div class="form-text"><span id="desc-count">0</span>/500 caracteres</div>
+            </div>
+
+            <!-- Volume -->
+            <div class="mb-3">
+              <label for="item-volume" class="form-label">Volume / Quantidade *</label>
+              <input type="text" class="form-control" id="item-volume" placeholder="Ex: Aproximadamente 100m², 2 caixas, 1 unidade" required>
+            </div>
+
+            <!-- Photos -->
+            <div class="mb-3">
+              <label class="form-label">Fotos * <span class="text-muted">(1 a 5 fotos)</span></label>
+              <div class="photo-upload-area" id="photo-upload-area">
+                <i class="bi bi-camera d-block"></i>
+                <p class="mb-1 fw-semibold">Clique para adicionar fotos</p>
+                <p class="text-muted mb-0" style="font-size: 0.85rem;">JPG, PNG — máximo 5 fotos</p>
+              </div>
+              <input type="file" id="item-photos" accept="image/*" multiple style="display: none;">
+              <div class="photo-preview-grid" id="photo-preview"></div>
+            </div>
+
+            <!-- Address -->
+            <hr class="my-3">
+            <h6 class="mb-3"><i class="bi bi-geo-alt me-1"></i> Localização do Item</h6>
+            <div class="row">
+              <div class="col-md-5 mb-3">
+                <label for="item-state" class="form-label">Estado *</label>
+                <select class="form-select" id="item-state" required>
+                  <option value="">Selecione...</option>
+                </select>
+              </div>
+              <div class="col-md-7 mb-3">
+                <label for="item-city" class="form-label">Cidade *</label>
+                <select class="form-select" id="item-city" required>
+                  <option value="">Selecione o estado primeiro</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Duration -->
+            <div class="mb-4">
+              <label for="item-duration" class="form-label">Duração do Anúncio *</label>
+              <select class="form-select" id="item-duration" required>
+                <option value="">Selecione...</option>
+              </select>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-lg w-100" id="btn-publish">
+              <i class="bi bi-rocket me-1"></i> Publicar Item
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div id="footer-container"></div>
+
+  <script src="js/utils.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/items.js"></script>
+  <script src="js/bids.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    let photos = []; // array of base64 strings
+
+    document.addEventListener('DOMContentLoaded', function() {
+      initPage();
+      if (!requireAuth()) return;
+
+      const currentUser = getCurrentUser();
+
+      // Populate category dropdown
+      const catSelect = document.getElementById('item-category');
+      CATEGORIES.forEach(cat => {
+        const opt = document.createElement('option');
+        opt.value = cat.id;
+        opt.textContent = cat.label;
+        catSelect.appendChild(opt);
+      });
+
+      // Populate duration dropdown
+      const durSelect = document.getElementById('item-duration');
+      DURATIONS.forEach(dur => {
+        const opt = document.createElement('option');
+        opt.value = dur.id;
+        opt.textContent = dur.label;
+        durSelect.appendChild(opt);
+      });
+
+      // Populate state dropdown and pre-fill from user profile
+      const stateSelect = document.getElementById('item-state');
+      for (const [code, data] of Object.entries(STATES_CITIES)) {
+        const opt = document.createElement('option');
+        opt.value = code;
+        opt.textContent = data.name;
+        stateSelect.appendChild(opt);
+      }
+
+      // Pre-fill address from user
+      if (currentUser && currentUser.address) {
+        stateSelect.value = currentUser.address.state || '';
+        if (stateSelect.value) {
+          populateCities(stateSelect.value, currentUser.address.city);
+        }
+      }
+
+      // State change -> populate cities
+      stateSelect.addEventListener('change', function() {
+        populateCities(this.value);
+      });
+
+      // Description char counter
+      document.getElementById('item-description').addEventListener('input', function() {
+        document.getElementById('desc-count').textContent = this.value.length;
+      });
+
+      // Photo upload
+      document.getElementById('photo-upload-area').addEventListener('click', function() {
+        document.getElementById('item-photos').click();
+      });
+
+      document.getElementById('item-photos').addEventListener('change', function(e) {
+        const files = Array.from(e.target.files);
+        if (photos.length + files.length > 5) {
+          showAlert('alert-area', 'Máximo de 5 fotos. Remova alguma antes de adicionar mais.', 'warning');
+          return;
+        }
+
+        files.forEach(file => {
+          if (!file.type.startsWith('image/')) return;
+          const reader = new FileReader();
+          reader.onload = function(ev) {
+            photos.push(ev.target.result);
+            renderPhotoPreview();
+          };
+          reader.readAsDataURL(file);
+        });
+
+        // Reset input so same file can be selected again
+        this.value = '';
+      });
+
+      // Form submit
+      document.getElementById('new-item-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        if (photos.length === 0) {
+          showAlert('alert-area', 'Adicione pelo menos 1 foto do item.', 'danger');
+          return;
+        }
+
+        const itemData = {
+          title: document.getElementById('item-title').value,
+          category: document.getElementById('item-category').value,
+          description: document.getElementById('item-description').value,
+          volume: document.getElementById('item-volume').value,
+          photos: photos,
+          address: {
+            state: document.getElementById('item-state').value,
+            city: document.getElementById('item-city').value,
+          },
+          duration: document.getElementById('item-duration').value,
+        };
+
+        const result = createItem(itemData);
+        if (result.success) {
+          showAlert('alert-area', 'Item publicado com sucesso! Redirecionando...', 'success', false);
+          setTimeout(() => {
+            window.location.href = 'dashboard.html';
+          }, 1500);
+        } else {
+          showAlert('alert-area', result.message, 'danger');
+        }
+      });
+    });
+
+    function populateCities(stateCode, preselect) {
+      const citySelect = document.getElementById('item-city');
+      citySelect.innerHTML = '<option value="">Selecione...</option>';
+      const stateData = STATES_CITIES[stateCode];
+      if (stateData) {
+        stateData.cities.forEach(city => {
+          const opt = document.createElement('option');
+          opt.value = city;
+          opt.textContent = city;
+          citySelect.appendChild(opt);
+        });
+        if (preselect) citySelect.value = preselect;
+      }
+    }
+
+    function renderPhotoPreview() {
+      const container = document.getElementById('photo-preview');
+      container.innerHTML = photos.map((src, index) => `
+        <div class="photo-preview-item">
+          <img src="${src}" alt="Foto ${index + 1}">
+          <button type="button" class="photo-preview-remove" onclick="removePhoto(${index})" title="Remover">
+            <i class="bi bi-x"></i>
+          </button>
+        </div>
+      `).join('');
+    }
+
+    function removePhoto(index) {
+      photos.splice(index, 1);
+      renderPhotoPreview();
+    }
+  </script>
+</body>
+</html>

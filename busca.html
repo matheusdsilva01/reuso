@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Buscar Itens — Reuso</title>
+  <meta name="description" content="Encontre itens disponíveis para reutilização. Filtre por categoria, localização e muito mais.">
+  <meta name="keywords" content="buscar, itens, reutilizar, reciclagem, materiais, marketplace">
+
+  <!-- Bootstrap 5 CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Bootstrap Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Custom CSS -->
+  <link href="css/style.css" rel="stylesheet">
+</head>
+<body>
+
+  <!-- Navbar -->
+  <div id="navbar-container"></div>
+
+  <main>
+    <div class="container section-padding">
+      <h2 class="mb-4" id="search-page-title">
+        <i class="bi bi-search me-2 text-reuso-primary"></i>Buscar Itens
+      </h2>
+
+      <!-- ====== FILTER BAR ====== -->
+      <div class="card mb-4" id="filter-bar">
+        <div class="card-body">
+          <div class="row g-3 align-items-end">
+            <!-- Text Search -->
+            <div class="col-12 col-md-6 col-lg-3">
+              <label for="search-text" class="form-label">Buscar por texto</label>
+              <input type="text" class="form-control" id="search-text" placeholder="Ex: sofá, madeira, telha..." autocomplete="off">
+            </div>
+            <!-- Category -->
+            <div class="col-6 col-md-3 col-lg-2">
+              <label for="filter-category" class="form-label">Categoria</label>
+              <select class="form-select" id="filter-category">
+                <option value="">Todas</option>
+              </select>
+            </div>
+            <!-- State -->
+            <div class="col-6 col-md-3 col-lg-2">
+              <label for="filter-state" class="form-label">Estado</label>
+              <select class="form-select" id="filter-state">
+                <option value="">Todos</option>
+              </select>
+            </div>
+            <!-- City -->
+            <div class="col-6 col-md-3 col-lg-2">
+              <label for="filter-city" class="form-label">Cidade</label>
+              <select class="form-select" id="filter-city" disabled>
+                <option value="">Todas</option>
+              </select>
+            </div>
+            <!-- Buttons -->
+            <div class="col-6 col-md-3 col-lg-3">
+              <div class="d-flex gap-2">
+                <button class="btn btn-primary flex-grow-1" id="btn-buscar" type="button">
+                  <i class="bi bi-search me-1"></i>Buscar
+                </button>
+                <button class="btn btn-outline-secondary" id="btn-limpar" type="button">
+                  <i class="bi bi-x-lg"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ====== RESULTS ====== -->
+      <p id="results-count" class="text-muted mb-3"></p>
+      <div id="results-grid"></div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <div id="footer-container"></div>
+
+  <!-- Scripts -->
+  <script src="js/utils.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/search.js"></script>
+  <!-- Bootstrap 5 JS Bundle -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      // Initialize page (seed data, navbar, footer)
+      initPage();
+
+      // Populate dropdowns
+      populateCategoryDropdown();
+      populateStateDropdown();
+
+      // Read URL params and apply initial filters
+      applyUrlParams();
+
+      // Attach events
+      attachSearchEvents();
+
+      // Initial search
+      executeSearch();
+    });
+
+    /**
+     * Populate the category dropdown from CATEGORIES constant
+     */
+    function populateCategoryDropdown() {
+      var select = document.getElementById('filter-category');
+      if (!select) return;
+
+      CATEGORIES.forEach(function (cat) {
+        var option = document.createElement('option');
+        option.value = cat.id;
+        option.textContent = cat.label;
+        select.appendChild(option);
+      });
+    }
+
+    /**
+     * Populate the state dropdown from STATES_CITIES constant
+     */
+    function populateStateDropdown() {
+      var select = document.getElementById('filter-state');
+      if (!select) return;
+
+      var stateKeys = Object.keys(STATES_CITIES).sort();
+      stateKeys.forEach(function (stateCode) {
+        var option = document.createElement('option');
+        option.value = stateCode;
+        option.textContent = STATES_CITIES[stateCode].name + ' (' + stateCode + ')';
+        select.appendChild(option);
+      });
+    }
+
+    /**
+     * Populate the city dropdown based on selected state
+     */
+    function populateCityDropdown(stateCode) {
+      var select = document.getElementById('filter-city');
+      if (!select) return;
+
+      // Reset
+      select.innerHTML = '<option value="">Todas</option>';
+
+      if (!stateCode || !STATES_CITIES[stateCode]) {
+        select.disabled = true;
+        return;
+      }
+
+      select.disabled = false;
+      var cities = STATES_CITIES[stateCode].cities;
+      cities.forEach(function (city) {
+        var option = document.createElement('option');
+        option.value = city;
+        option.textContent = city;
+        select.appendChild(option);
+      });
+    }
+
+    /**
+     * Read URL parameters and apply to filter fields
+     */
+    function applyUrlParams() {
+      var params = new URLSearchParams(window.location.search);
+
+      var categoria = params.get('categoria');
+      var estado = params.get('estado');
+      var texto = params.get('texto');
+      var cidade = params.get('cidade');
+
+      if (categoria) {
+        document.getElementById('filter-category').value = categoria;
+      }
+
+      if (estado) {
+        document.getElementById('filter-state').value = estado;
+        populateCityDropdown(estado);
+        if (cidade) {
+          document.getElementById('filter-city').value = cidade;
+        }
+      }
+
+      if (texto) {
+        document.getElementById('search-text').value = texto;
+      }
+    }
+
+    /**
+     * Attach event listeners for search interactions
+     */
+    function attachSearchEvents() {
+      // Search button
+      document.getElementById('btn-buscar').addEventListener('click', executeSearch);
+
+      // Clear button
+      document.getElementById('btn-limpar').addEventListener('click', clearFilters);
+
+      // Enter key on text field
+      document.getElementById('search-text').addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          executeSearch();
+        }
+      });
+
+      // State change → populate cities
+      document.getElementById('filter-state').addEventListener('change', function () {
+        var stateCode = this.value;
+        populateCityDropdown(stateCode);
+      });
+    }
+
+    /**
+     * Execute the search with current filter values
+     */
+    function executeSearch() {
+      var filters = {
+        text: document.getElementById('search-text').value,
+        category: document.getElementById('filter-category').value,
+        state: document.getElementById('filter-state').value,
+        city: document.getElementById('filter-city').value,
+      };
+
+      var results = filterItems(filters);
+
+      // Update results count
+      var countEl = document.getElementById('results-count');
+      if (countEl) {
+        if (results.length === 0) {
+          countEl.textContent = 'Nenhum item encontrado';
+        } else if (results.length === 1) {
+          countEl.textContent = '1 item encontrado';
+        } else {
+          countEl.textContent = results.length + ' itens encontrados';
+        }
+      }
+
+      // Render results
+      renderItemGrid('results-grid', results);
+    }
+
+    /**
+     * Clear all filters and re-render
+     */
+    function clearFilters() {
+      document.getElementById('search-text').value = '';
+      document.getElementById('filter-category').value = '';
+      document.getElementById('filter-state').value = '';
+
+      var citySelect = document.getElementById('filter-city');
+      citySelect.innerHTML = '<option value="">Todas</option>';
+      citySelect.disabled = true;
+
+      // Remove URL params
+      if (window.history.replaceState) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+
+      executeSearch();
+    }
+  </script>
+</body>
+</html>

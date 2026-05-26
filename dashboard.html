@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — Reuso</title>
+  <meta name="description" content="Gerencie seus itens, propostas e perfil no Reuso.">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="css/style.css" rel="stylesheet">
+</head>
+<body>
+  <div id="navbar-container"></div>
+
+  <main>
+    <div class="container" style="padding-top: 2rem; padding-bottom: 3rem;">
+      <div id="alert-area"></div>
+
+      <!-- Dashboard Header -->
+      <div class="dashboard-header" id="dashboard-header"></div>
+
+      <!-- Stats -->
+      <div class="dashboard-stats" id="dashboard-stats"></div>
+
+      <!-- Tabs -->
+      <ul class="nav nav-tabs mb-4" id="dashboardTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button class="nav-link active" id="tab-items" data-bs-toggle="tab" data-bs-target="#my-items" type="button" role="tab">
+            <i class="bi bi-box-seam me-1"></i> Meus Itens
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="tab-bids" data-bs-toggle="tab" data-bs-target="#my-bids" type="button" role="tab">
+            <i class="bi bi-tag me-1"></i> Meus Lances
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="tab-profile" data-bs-toggle="tab" data-bs-target="#my-profile" type="button" role="tab">
+            <i class="bi bi-person me-1"></i> Meu Perfil
+          </button>
+        </li>
+      </ul>
+
+      <div class="tab-content" id="dashboardTabContent">
+        <div class="tab-pane fade show active" id="my-items" role="tabpanel"></div>
+        <div class="tab-pane fade" id="my-bids" role="tabpanel"></div>
+        <div class="tab-pane fade" id="my-profile" role="tabpanel"></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Confirm Modal -->
+  <div class="modal fade" id="confirmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="confirmModalTitle">Confirmar</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body" id="confirmModalBody"></div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Não</button>
+          <button type="button" class="btn btn-primary btn-sm" id="confirmModalBtn">Sim</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="footer-container"></div>
+
+  <script src="js/utils.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/items.js"></script>
+  <script src="js/bids.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    let currentUser = null;
+
+    document.addEventListener('DOMContentLoaded', function() {
+      initPage();
+      if (!requireAuth()) return;
+
+      currentUser = getCurrentUser();
+      if (!currentUser) return;
+
+      renderDashboardHeader();
+      renderStats();
+      renderMyItems();
+      renderMyBids();
+      renderMyProfile();
+
+      // Re-render tabs when switching
+      document.getElementById('tab-items').addEventListener('shown.bs.tab', renderMyItems);
+      document.getElementById('tab-bids').addEventListener('shown.bs.tab', renderMyBids);
+    });
+
+    function renderDashboardHeader() {
+      const typeBadge = currentUser.type === 'pj'
+        ? '<span class="badge badge-pj ms-2">Empresa</span>'
+        : '<span class="badge badge-pf ms-2">Pessoa Física</span>';
+
+      document.getElementById('dashboard-header').innerHTML = `
+        <h2>Olá, ${currentUser.name.split(' ')[0]}! ${typeBadge}</h2>
+        <p>Gerencie seus itens e propostas</p>
+      `;
+    }
+
+    function renderStats() {
+      const myItems = getItemsByUser(currentUser.id);
+      const myBids = getBidsByUser(currentUser.id);
+      const finalized = myItems.filter(i => i.status === 'finalizado').length;
+
+      document.getElementById('dashboard-stats').innerHTML = `
+        <div class="stat-card">
+          <div class="stat-number">${myItems.length}</div>
+          <div class="stat-label">Meus Itens</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">${myBids.length}</div>
+          <div class="stat-label">Minhas Propostas</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">${finalized}</div>
+          <div class="stat-label">Negociados</div>
+        </div>
+      `;
+    }
+
+    /* ========== TAB 1: MEUS ITENS ========== */
+    function renderMyItems() {
+      const container = document.getElementById('my-items');
+      const items = getItemsByUser(currentUser.id);
+
+      if (items.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <i class="bi bi-box-seam"></i>
+            <h5>Nenhum item cadastrado</h5>
+            <p>Você ainda não publicou nenhum item. Que tal começar agora?</p>
+            <a href="novo-item.html" class="btn btn-primary"><i class="bi bi-plus-circle me-1"></i> Cadastrar Primeiro Item</a>
+          </div>
+        `;
+        return;
+      }
+
+      let html = '';
+      items.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+      items.forEach((item, index) => {
+        const bids = getBidsByItem(item.id);
+        const statusLabel = getStatusLabel(item.status);
+        const statusClass = getStatusBadgeClass(item.status);
+        const catLabel = getCategoryLabel(item.category);
+        const photoSrc = item.photos && item.photos[0] ? item.photos[0] : generatePlaceholderImage(item.title, '#d1fae5');
+        const canAct = item.status === 'ativo' || item.status === 'expirado';
+
+        let bidsHtml = '';
+        if (bids.length > 0) {
+          bidsHtml = bids.map(bid => {
+            const bidUser = getById(STORAGE_KEYS.USERS, bid.userId);
+            const bidName = bidUser ? bidUser.name : 'Desconhecido';
+            const bidTypeBadge = `<span class="badge ${getBidTypeBadgeClass(bid.type)}">${getBidTypeIcon(bid.type)} ${getBidTypeLabel(bid.type)}</span>`;
+            const bidValue = bid.type === 'gratis' ? '' : ` — <strong>${formatCurrency(bid.value)}</strong>`;
+            const isAccepted = item.acceptedBidId === bid.id;
+
+            return `
+              <div class="bid-card ${isAccepted ? 'border-success' : ''}">
+                <div class="bid-info">
+                  <div>
+                    <span class="bid-user">${bidName}</span>
+                    ${bidUser && bidUser.type === 'pj' ? '<span class="badge badge-pj ms-1" style="font-size:0.65rem;">PJ</span>' : ''}
+                    <br>
+                    ${bidTypeBadge}${bidValue}
+                  </div>
+                </div>
+                <div>
+                  ${isAccepted ? '<span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Aceita</span>' :
+                    (canAct ? `<button class="btn btn-sm btn-outline-primary" onclick="handleAcceptBid('${item.id}', '${bid.id}')"><i class="bi bi-check me-1"></i>Aceitar</button>` : '')}
+                </div>
+              </div>
+            `;
+          }).join('');
+        } else {
+          bidsHtml = '<p class="text-muted text-center py-2 mb-0"><i class="bi bi-chat me-1"></i>Nenhuma proposta recebida</p>';
+        }
+
+        html += `
+          <div class="dashboard-item-card">
+            <div class="dashboard-item-header">
+              <img src="${photoSrc}" alt="${item.title}" class="dashboard-item-thumb">
+              <div class="dashboard-item-info">
+                <h6><a href="item.html?id=${item.id}" class="text-decoration-none text-dark">${item.title}</a></h6>
+                <div class="item-meta">
+                  <span class="badge badge-category">${catLabel}</span>
+                  <span class="badge ${statusClass}">${statusLabel}</span>
+                  <span><i class="bi bi-calendar3 me-1"></i>${formatDate(item.expiresAt)}</span>
+                  <span><i class="bi bi-chat-dots me-1"></i>${bids.length} proposta${bids.length !== 1 ? 's' : ''}</span>
+                </div>
+              </div>
+              <div class="dashboard-item-actions">
+                <button class="btn btn-sm btn-outline-primary" data-bs-toggle="collapse" data-bs-target="#bids-${index}">
+                  <i class="bi bi-eye me-1"></i>Propostas
+                </button>
+                ${canAct ? `<button class="btn btn-sm btn-outline-danger" onclick="handleCancelItem('${item.id}')"><i class="bi bi-x-circle me-1"></i>Cancelar</button>` : ''}
+              </div>
+            </div>
+            <div class="collapse mt-3" id="bids-${index}">
+              <div class="border-top pt-3">
+                <h6 class="mb-2" style="font-size:0.9rem;"><i class="bi bi-chat-dots me-1"></i>Propostas Recebidas</h6>
+                ${bidsHtml}
+              </div>
+            </div>
+          </div>
+        `;
+      });
+
+      container.innerHTML = html;
+    }
+
+    /* ========== TAB 2: MEUS LANCES ========== */
+    function renderMyBids() {
+      const container = document.getElementById('my-bids');
+      const bids = getBidsByUser(currentUser.id);
+
+      if (bids.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <i class="bi bi-tag"></i>
+            <h5>Nenhuma proposta feita</h5>
+            <p>Você ainda não fez nenhuma proposta em itens de outros usuários.</p>
+            <a href="busca.html" class="btn btn-primary"><i class="bi bi-search me-1"></i> Explorar Itens</a>
+          </div>
+        `;
+        return;
+      }
+
+      let html = '';
+      bids.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+      bids.forEach(bid => {
+        const item = getById(STORAGE_KEYS.ITEMS, bid.itemId);
+        if (!item) return;
+
+        const photoSrc = item.photos && item.photos[0] ? item.photos[0] : generatePlaceholderImage(item.title, '#d1fae5');
+        const bidTypeBadge = `<span class="badge ${getBidTypeBadgeClass(bid.type)}">${getBidTypeIcon(bid.type)} ${getBidTypeLabel(bid.type)}</span>`;
+        const bidValue = bid.type === 'gratis' ? '' : ` — ${formatCurrency(bid.value)}`;
+
+        // Derive status
+        let derivedStatus = '';
+        if (item.status === 'ativo') {
+          derivedStatus = '<span class="badge bg-warning text-dark"><i class="bi bi-clock me-1"></i>Pendente</span>';
+        } else if (item.status === 'finalizado' && item.acceptedBidId === bid.id) {
+          derivedStatus = '<span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Aceita ✓</span>';
+        } else if (item.status === 'finalizado' && item.acceptedBidId !== bid.id) {
+          derivedStatus = '<span class="badge bg-secondary"><i class="bi bi-dash-circle me-1"></i>Não selecionada</span>';
+        } else if (item.status === 'cancelado') {
+          derivedStatus = '<span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>Item cancelado</span>';
+        } else if (item.status === 'expirado') {
+          derivedStatus = '<span class="badge bg-warning text-dark"><i class="bi bi-clock-history me-1"></i>Expirado</span>';
+        }
+
+        html += `
+          <div class="dashboard-item-card">
+            <div class="dashboard-item-header">
+              <img src="${photoSrc}" alt="${item.title}" class="dashboard-item-thumb">
+              <div class="dashboard-item-info">
+                <h6><a href="item.html?id=${item.id}" class="text-decoration-none text-dark">${item.title}</a></h6>
+                <div class="item-meta">
+                  ${bidTypeBadge}${bidValue}
+                  <span class="ms-1">${derivedStatus}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+
+      container.innerHTML = html;
+    }
+
+    /* ========== TAB 3: MEU PERFIL ========== */
+    function renderMyProfile() {
+      const container = document.getElementById('my-profile');
+      const u = currentUser;
+
+      const pjFields = u.type === 'pj' ? `
+        <div class="mb-3">
+          <label class="form-label">CNPJ</label>
+          <input type="text" class="form-control" value="${u.cnpj}" readonly style="background-color: #f8f9fa;">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Razão Social</label>
+          <input type="text" class="form-control" value="${u.companyName}" readonly style="background-color: #f8f9fa;">
+        </div>
+      ` : '';
+
+      const pfFields = u.type === 'pf' && u.cpf ? `
+        <div class="mb-3">
+          <label class="form-label">CPF</label>
+          <input type="text" class="form-control" value="${u.cpf}" readonly style="background-color: #f8f9fa;">
+        </div>
+      ` : '';
+
+      container.innerHTML = `
+        <div class="card shadow-sm" style="max-width: 600px;">
+          <div class="card-body p-4">
+            <h5 class="mb-3"><i class="bi bi-person-circle me-2"></i>Meu Perfil</h5>
+            <div id="profile-alert"></div>
+
+            <form id="profile-form">
+              <div class="mb-3">
+                <label class="form-label">Tipo de Conta</label>
+                <input type="text" class="form-control" value="${u.type === 'pj' ? 'Empresa' : 'Pessoa Física'}" readonly style="background-color: #f8f9fa;">
+              </div>
+              <div class="mb-3">
+                <label class="form-label">E-mail</label>
+                <input type="email" class="form-control" value="${u.email}" readonly style="background-color: #f8f9fa;">
+              </div>
+              ${pjFields}
+              ${pfFields}
+              <div class="mb-3">
+                <label for="profile-name" class="form-label">Nome</label>
+                <input type="text" class="form-control" id="profile-name" value="${u.name}">
+              </div>
+              <div class="mb-3">
+                <label for="profile-phone" class="form-label">Telefone</label>
+                <input type="text" class="form-control" id="profile-phone" value="${u.phone}">
+              </div>
+              <div class="mb-3">
+                <label for="profile-cep" class="form-label">CEP</label>
+                <input type="text" class="form-control" id="profile-cep" value="${u.address.cep || ''}">
+              </div>
+              <div class="row">
+                <div class="col-md-5 mb-3">
+                  <label for="profile-state" class="form-label">Estado</label>
+                  <select class="form-select" id="profile-state"></select>
+                </div>
+                <div class="col-md-7 mb-3">
+                  <label for="profile-city" class="form-label">Cidade</label>
+                  <select class="form-select" id="profile-city"></select>
+                </div>
+              </div>
+              <button type="submit" class="btn btn-primary">
+                <i class="bi bi-check-lg me-1"></i> Salvar Alterações
+              </button>
+            </form>
+          </div>
+        </div>
+      `;
+
+      // Populate states
+      const stateSelect = document.getElementById('profile-state');
+      stateSelect.innerHTML = '<option value="">Selecione...</option>';
+      for (const [code, data] of Object.entries(STATES_CITIES)) {
+        const opt = document.createElement('option');
+        opt.value = code;
+        opt.textContent = data.name;
+        stateSelect.appendChild(opt);
+      }
+      stateSelect.value = u.address.state || '';
+
+      // Populate cities
+      if (u.address.state) {
+        const citySelect = document.getElementById('profile-city');
+        citySelect.innerHTML = '<option value="">Selecione...</option>';
+        const stateData = STATES_CITIES[u.address.state];
+        if (stateData) {
+          stateData.cities.forEach(city => {
+            const opt = document.createElement('option');
+            opt.value = city;
+            opt.textContent = city;
+            citySelect.appendChild(opt);
+          });
+        }
+        citySelect.value = u.address.city || '';
+      }
+
+      // State change
+      stateSelect.addEventListener('change', function() {
+        const citySelect = document.getElementById('profile-city');
+        citySelect.innerHTML = '<option value="">Selecione...</option>';
+        const stateData = STATES_CITIES[this.value];
+        if (stateData) {
+          stateData.cities.forEach(city => {
+            const opt = document.createElement('option');
+            opt.value = city;
+            opt.textContent = city;
+            citySelect.appendChild(opt);
+          });
+        }
+      });
+
+      // Phone mask
+      document.getElementById('profile-phone').addEventListener('input', function() {
+        this.value = maskPhone(this.value);
+      });
+
+      // Form submit
+      document.getElementById('profile-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const updated = {
+          name: document.getElementById('profile-name').value.trim(),
+          phone: document.getElementById('profile-phone').value.trim(),
+          address: {
+            cep: document.getElementById('profile-cep').value.trim(),
+            state: document.getElementById('profile-state').value,
+            city: document.getElementById('profile-city').value,
+          },
+        };
+
+        const result = updateUserProfile(currentUser.id, updated);
+        if (result) {
+          currentUser = getCurrentUser();
+          showAlert('profile-alert', 'Perfil atualizado com sucesso!', 'success');
+          renderDashboardHeader();
+        } else {
+          showAlert('profile-alert', 'Erro ao atualizar perfil.', 'danger');
+        }
+      });
+    }
+
+    /* ========== ACTIONS ========== */
+    function handleAcceptBid(itemId, bidId) {
+      document.getElementById('confirmModalTitle').textContent = 'Aceitar Proposta';
+      document.getElementById('confirmModalBody').textContent = 'Tem certeza que deseja aceitar esta proposta? O item será marcado como finalizado.';
+      const modal = new bootstrap.Modal(document.getElementById('confirmModal'));
+      document.getElementById('confirmModalBtn').onclick = function() {
+        const result = finalizeItem(itemId, bidId, currentUser.id);
+        modal.hide();
+        if (result.success) {
+          showAlert('alert-area', 'Proposta aceita! Item finalizado com sucesso.', 'success');
+          renderStats();
+          renderMyItems();
+        } else {
+          showAlert('alert-area', result.message, 'danger');
+        }
+      };
+      modal.show();
+    }
+
+    function handleCancelItem(itemId) {
+      document.getElementById('confirmModalTitle').textContent = 'Cancelar Oferta';
+      document.getElementById('confirmModalBody').textContent = 'Tem certeza que deseja cancelar esta oferta? Esta ação não pode ser desfeita.';
+      const modal = new bootstrap.Modal(document.getElementById('confirmModal'));
+      document.getElementById('confirmModalBtn').onclick = function() {
+        const result = cancelItem(itemId, currentUser.id);
+        modal.hide();
+        if (result.success) {
+          showAlert('alert-area', 'Oferta cancelada.', 'warning');
+          renderStats();
+          renderMyItems();
+        } else {
+          showAlert('alert-area', result.message, 'danger');
+        }
+      };
+      modal.show();
+    }
+  </script>
+</body>
+</html>
